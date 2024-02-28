@@ -4,18 +4,16 @@ const _0x2df470=_0x1a12,_0x2b63a0=_0xd457,_0x1eaee1=(function(){let _0xda57d6=!!
 firebase.initializeApp(firebaseConfig);
 const firestore = firebase.firestore();
 var isDoNotDisturbOn = false;
-
+var currentRequestId = null; 
 function listenToValue() {
   firestore.collection("roomSettings").doc("GhXoQsi0oXlc8Vu8oXYD").onSnapshot((doc) => {
     if (doc.exists) {
       isDoNotDisturbOn = doc.data().isOn;
-
       updateElementDisplay();
     }
   }, (error) => {
-      console.log("Error listening to document:", error);
+    console.log("Error listening to document:", error);
   });
-  updateElementDisplay();
 }
 
 function updateElementDisplay() {
@@ -27,5 +25,94 @@ function updateElementDisplay() {
   });
   message.textContent = isDoNotDisturbOn ? "Daniel is currently busy" : "";
   image.src = isDoNotDisturbOn ? "./moon_icon_fill.png" : "./moon_icon_notFill.png";
+  
+  var requestButton = document.querySelector("#requestButton");
+  if (requestButton) {
+    requestButton.style.display = isDoNotDisturbOn ? "block" : "none";
+  }
 }
+
+function sendRequest() {
+  if (isDoNotDisturbOn) {
+    var requesterName = window.prompt("Please enter your name:");
+    
+    if (requesterName) {
+      firestore.collection("requests").add({
+        status: "pending",
+        requesterName: requesterName,
+        requestTime: firebase.firestore.FieldValue.serverTimestamp()
+      })
+      .then((docRef) => {
+        console.log("Request sent with ID: ", docRef.id);
+        alert("Your request has been sent successfully.");
+        currentRequestId = docRef.id; // Store the request ID
+        listenToRequestStatus(docRef.id); // Listen for updates to this request's status
+      })
+      .catch((error) => {
+        console.error("Error sending request: ", error);
+        alert("There was an error sending your request.");
+      });
+    } else {
+      alert("You must enter your name to send a request.");
+    }
+  } else {
+    alert("Do Not Disturb is not activated. There's no need to send a request.");
+  }
+}
+
+function listenToRequestStatus(requestId) {
+  firestore.collection("requests").doc(requestId).onSnapshot((doc) => {
+    if (doc.exists) {
+      var requestStatus = doc.data().status;
+      sessionStorage.setItem('requestStatus', status);
+      // Call a function to update the UI with this status
+      updateRequestStatusUI(requestStatus);
+    } else {
+      console.log("No such document!");
+    }
+  }, (error) => {
+    console.log("Error getting document:", error);
+  });
+}
+
+function updateRequestStatusUI(status) {
+  var statusElement = document.querySelector("#requestStatus");
+  if (!statusElement) {
+    statusElement = document.createElement("div");
+    statusElement.id = "requestStatus";
+    document.body.appendChild(statusElement);
+  }
+
+  // Clear previous classes
+  statusElement.className = "";
+
+  // Add class based on status
+  statusElement.classList.add(status);
+
+  // Update the text and class based on the status
+  switch (status) {
+    case "pending":
+      statusElement.textContent = "Your request is being reviewed.";
+      break;
+    case "approved":
+      statusElement.textContent = "Your request has been approved. Feel free to enter.";
+      break;
+    case "denied":
+      statusElement.textContent = "Your request has been denied.";
+      break;
+    default:
+      statusElement.textContent = "The status of your request is currently unknown. Please check back later.";
+      statusElement.classList.add("unknown"); // Add class for unknown status
+      break;
+  }
+}
+
+
+
+
+
+// Initialize the listener to update UI based on the current "Do Not Disturb" status
 listenToValue();
+
+// Attach the event listener to the "Request to Enter" button
+document.querySelector("#requestButton").addEventListener("click", sendRequest);
